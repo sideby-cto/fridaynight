@@ -11,7 +11,7 @@ const express = require('express')
 const cors = require('cors')
 
 const app = express()
-app.use(cors())
+app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }))
 app.use(express.json())
 
 /** GET /api/plans — return all historical Friday night plans, newest first. */

@@ -3,6 +3,10 @@ import './App.css'
 
 const EMOJIS = ['🎬', '🍕', '🌙', '🎮', '🍿', '🎉', '🍦', '🎲', '📺', '🎤']
 
+// In production (e.g. Vercel), set VITE_API_URL to your backend's public URL.
+// Leave it unset for local development – the Vite dev proxy handles /api/* automatically.
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+
 const DEFAULT_ACTIVITIES = [
   { id: 1, emoji: '🍕', title: 'Dinner', time: '6:00 PM', description: 'Enjoy a delicious dinner together' },
   { id: 2, emoji: '🎬', title: 'Movie at the Theater', time: '7:00 PM', description: 'Watch a fun movie on the big screen' },
@@ -155,7 +159,7 @@ function App() {
 
   async function fetchHistory() {
     try {
-      const res = await fetch('/api/plans')
+      const res = await fetch(`${API_BASE}/api/plans`)
       if (!res.ok) return
       setHistory(await res.json())
     } catch {
@@ -167,7 +171,7 @@ function App() {
     if (activities.length === 0) return
     setSaveStatus('saving')
     try {
-      const res = await fetch('/api/plans', {
+      const res = await fetch(`${API_BASE}/api/plans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fridayDate: getThisFridayDate(), activities }),
@@ -186,7 +190,7 @@ function App() {
     setPredStatus('loading')
     setPrediction(null)
     try {
-      const res = await fetch('/api/predict')
+      const res = await fetch(`${API_BASE}/api/predict`)
       if (!res.ok) throw new Error('Prediction failed')
       const data = await res.json()
       setPrediction(data)
