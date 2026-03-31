@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+server/friday_plans.db
+server/friday_plans.db-shm
+server/friday_plans.db-wal
 
 # Editor directories and files
 .vscode/*

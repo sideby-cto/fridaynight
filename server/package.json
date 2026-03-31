@@ -1,0 +1,15 @@
+{
+  "name": "fridaynight-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "brain.js": "1.6.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}
