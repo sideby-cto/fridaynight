@@ -17,7 +17,8 @@ A fun, interactive web app for planning Friday nights with your kids!
 | Part | Stack |
 |------|-------|
 | **Frontend** | React + Vite |
-| **Backend** | Node.js + Express + SQLite (`better-sqlite3`) |
+| **Backend** | Node.js + Express |
+| **Database** | Supabase (PostgreSQL) |
 
 ---
 
@@ -35,7 +36,22 @@ npm install
 cd server && npm install
 ```
 
-### 3. Run everything together
+### 3. Set up Supabase
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Run the migration in **Supabase → SQL Editor** (or via `supabase db push`):
+   ```
+   supabase/migrations/0001_initial_schema.sql
+   ```
+3. Copy your project credentials from **Project Settings → API**.
+4. Create a `server/.env` file (see `.env.example`):
+
+   ```
+   SUPABASE_URL=https://your-project-ref.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   ```
+
+### 4. Run everything together
 
 ```bash
 npm run dev:all
@@ -51,7 +67,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 ## Deploying to Vercel (frontend) + Railway or Render (backend)
 
 The frontend deploys to Vercel as a static site.  
-The backend needs a persistent Node.js host with filesystem access for its SQLite database — **Vercel Serverless Functions cannot be used for the backend** because their filesystem is ephemeral. Use [Railway](https://railway.app) or [Render](https://render.com) instead.
+The backend is a stateless Node.js server — no persistent filesystem is required because all data lives in Supabase. You can deploy it anywhere that runs Node.js, including [Railway](https://railway.app) and [Render](https://render.com).
 
 ### Step 1 – Deploy the backend
 
@@ -60,7 +76,14 @@ The backend needs a persistent Node.js host with filesystem access for its SQLit
 1. Go to [railway.app](https://railway.app) and create a new project from your GitHub repo.
 2. In the service settings, set **Root Directory** to `server`.
 3. Railway detects the `npm start` script automatically and runs `node index.js`.
-4. Once deployed, copy the public URL (e.g. `https://fridaynight-server.up.railway.app`).
+4. Add the following **Environment Variables** in the service settings:
+
+   | Name | Value |
+   |------|-------|
+   | `SUPABASE_URL` | Your Supabase project URL |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service-role key |
+
+5. Once deployed, copy the public URL (e.g. `https://fridaynight-server.up.railway.app`).
 
 #### Option B: Render
 
@@ -69,7 +92,8 @@ The backend needs a persistent Node.js host with filesystem access for its SQLit
    - **Root Directory**: `server`
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
-3. Deploy and copy the public URL.
+3. Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` under **Environment** in the service settings.
+4. Deploy and copy the public URL.
 
 ### Step 2 – Deploy the frontend to Vercel
 
@@ -114,6 +138,8 @@ npm run preview
 
 | Variable | Where | Description |
 |----------|-------|-------------|
+| `SUPABASE_URL` | Backend | Your Supabase project URL (Project Settings → API). |
+| `SUPABASE_SERVICE_ROLE_KEY` | Backend | Supabase service-role secret key. **Never expose this to the frontend.** |
 | `VITE_API_URL` | Frontend (Vercel) | Base URL of the backend API, no trailing slash. Omit for local dev — the Vite proxy handles it automatically. |
 | `PORT` | Backend | Port the Express server listens on. Defaults to `3001`. |
 | `ALLOWED_ORIGIN` | Backend | If set, restricts CORS to this origin only. |

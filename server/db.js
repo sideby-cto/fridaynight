@@ -1,71 +1,104 @@
-const Database = require('better-sqlite3')
-const path = require('path')
+const { createClient } = require('@supabase/supabase-js')
 
-const db = new Database(path.join(__dirname, 'friday_plans.db'))
-
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS friday_plans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    friday_date TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS plan_activities (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL REFERENCES friday_plans(id) ON DELETE CASCADE,
-    position INTEGER NOT NULL,
-    emoji TEXT NOT NULL,
-    title TEXT NOT NULL,
-    time TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT ''
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_plan_activities_plan_id ON plan_activities(plan_id);
-  CREATE INDEX IF NOT EXISTS idx_friday_plans_date ON friday_plans(friday_date);
-`)
-
-const stmtGetPlan = db.prepare('SELECT * FROM friday_plans WHERE id = ?')
-const stmtGetActivities = db.prepare(
-  'SELECT * FROM plan_activities WHERE plan_id = ? ORDER BY position ASC'
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-function getPlan(id) {
-  const plan = stmtGetPlan.get(id)
-  if (!plan) return null
-  return { ...plan, activities: stmtGetActivities.all(id) }
+async function getPlan(id) {
+  const { data: plan, error: planError } = await supabase
+    .from('friday_plans')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (planError || !plan) return null
+
+  const { data: activities, error: actError } = await supabase
+    .from('plan_activities')
+    .select('*')
+    .eq('plan_id', id)
+    .order('position', { ascending: true })
+
+  if (actError) throw actError
+
+  return { ...plan, activities }
 }
 
-function getPlans(order = 'ASC') {
-  const dir = order === 'DESC' ? 'DESC' : 'ASC'
-  const plans = db.prepare(`SELECT * FROM friday_plans ORDER BY friday_date ${dir}`).all()
-  return plans.map(plan => ({ ...plan, activities: stmtGetActivities.all(plan.id) }))
+async function getPlans(order = 'ASC') {
+  const ascending = order !== 'DESC'
+
+  const { data: plans, error: plansError } = await supabase
+    .from('friday_plans')
+    .select('*')
+    .order('friday_date', { ascending })
+
+  if (plansError) throw plansError
+  if (!plans || plans.length === 0) return []
+
+  const planIds = plans.map(p => p.id)
+
+  const { data: activities, error: actError } = await supabase
+    .from('plan_activities')
+    .select('*')
+    .in('plan_id', planIds)
+    .order('position', { ascending: true })
+
+  if (actError) throw actError
+
+  const actsByPlanId = {}
+  for (const act of activities) {
+    if (!actsByPlanId[act.plan_id]) actsByPlanId[act.plan_id] = []
+    actsByPlanId[act.plan_id].push(act)
+  }
+
+  return plans.map(plan => ({ ...plan, activities: actsByPlanId[plan.id] ?? [] }))
 }
 
-function savePlan(fridayDate, activities) {
-  return db.transaction(() => {
-    const existing = db.prepare('SELECT id FROM friday_plans WHERE friday_date = ?').get(fridayDate)
-    let planId
+async function savePlan(fridayDate, activities) {
+  const { data: existing } = await supabase
+    .from('friday_plans')
+    .select('id')
+    .eq('friday_date', fridayDate)
+    .maybeSingle()
 
-    if (existing) {
-      planId = existing.id
-      db.prepare('DELETE FROM plan_activities WHERE plan_id = ?').run(planId)
-    } else {
-      const result = db.prepare('INSERT INTO friday_plans (friday_date) VALUES (?)').run(fridayDate)
-      planId = result.lastInsertRowid
-    }
+  let planId
 
-    const insertActivity = db.prepare(
-      'INSERT INTO plan_activities (plan_id, position, emoji, title, time, description) VALUES (?, ?, ?, ?, ?, ?)'
-    )
-    activities.forEach((act, i) => {
-      insertActivity.run(planId, i, act.emoji, act.title, act.time, act.description || '')
-    })
+  if (existing) {
+    planId = existing.id
+    const { error: deleteError } = await supabase
+      .from('plan_activities')
+      .delete()
+      .eq('plan_id', planId)
 
-    return getPlan(planId)
-  })()
+    if (deleteError) throw deleteError
+  } else {
+    const { data: newPlan, error: insertError } = await supabase
+      .from('friday_plans')
+      .insert({ friday_date: fridayDate })
+      .select('id')
+      .single()
+
+    if (insertError) throw insertError
+    planId = newPlan.id
+  }
+
+  const activityRows = activities.map((act, i) => ({
+    plan_id: planId,
+    position: i,
+    emoji: act.emoji,
+    title: act.title,
+    time: act.time,
+    description: act.description || '',
+  }))
+
+  const { error: actInsertError } = await supabase
+    .from('plan_activities')
+    .insert(activityRows)
+
+  if (actInsertError) throw actInsertError
+
+  return getPlan(planId)
 }
 
 module.exports = { getPlans, savePlan }

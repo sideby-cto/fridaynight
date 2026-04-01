@@ -15,16 +15,16 @@ app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }))
 app.use(express.json())
 
 /** GET /api/plans — return all historical Friday night plans, newest first. */
-app.get('/api/plans', (req, res) => {
+app.get('/api/plans', async (req, res) => {
   try {
-    res.json(getPlans('DESC'))
+    res.json(await getPlans('DESC'))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })
 
 /** POST /api/plans — save (or overwrite) the plan for a given Friday date. */
-app.post('/api/plans', (req, res) => {
+app.post('/api/plans', async (req, res) => {
   const { fridayDate, activities } = req.body
   if (!fridayDate || !Array.isArray(activities) || activities.length === 0) {
     return res.status(400).json({ error: 'fridayDate and a non-empty activities array are required.' })
@@ -33,7 +33,7 @@ app.post('/api/plans', (req, res) => {
     return res.status(400).json({ error: `${fridayDate} is not a Friday.` })
   }
   try {
-    const plan = savePlan(fridayDate, activities)
+    const plan = await savePlan(fridayDate, activities)
     res.status(201).json(plan)
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -41,10 +41,10 @@ app.post('/api/plans', (req, res) => {
 })
 
 /** GET /api/predict — run LSTM on historical data and return a predicted next-Friday plan. */
-app.get('/api/predict', (req, res) => {
+app.get('/api/predict', async (req, res) => {
   try {
     // Prediction needs chronological (oldest-first) order for correct sequence training
-    const plans = getPlans('ASC')
+    const plans = await getPlans('ASC')
     const result = predictNextFriday(plans)
     res.json(result)
   } catch (err) {
